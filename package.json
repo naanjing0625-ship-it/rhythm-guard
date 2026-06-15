@@ -1,0 +1,28 @@
+{
+  "name": "rhythm-guard",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "build:html": "tsc && vite build --config vite.config.standalone.ts && node scripts/finalize-html.mjs",
+    "build:webgl": "npm run build:html",
+    "deploy:pages": "npm run build:html",
+    "serve:release": "node scripts/serve-release.mjs",
+    "pack": "node scripts/pack-playtest.mjs",
+    "generate:td": "node scripts/generate-td-content.mjs",
+    "generate:charts": "node scripts/generate-charts.mjs",
+    "process:sprites": "python scripts/process-tower-sheets.py",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.4.11",
+    "vite-plugin-pwa": "^0.20.5",
+    "vite-plugin-singlefile": "^2.3.3"
+  }
+}
