@@ -1147,24 +1147,30 @@ export class RhythmScene extends Phaser.Scene {
       ? Math.max(18, Math.round(36 * ui))
       : Math.max(14, Math.round(28 * ui));
 
+    const centerY = viewH / 2;
+    const titleY = centerY - Math.round(118 * ui);
+    const gradeY = centerY - Math.round(10 * ui);
+    const scoreY = centerY + Math.round(74 * ui);
+    const lootY = centerY + Math.round(132 * ui);
+
     this.stageRoot.add(this.add.rectangle(viewW / 2, viewH / 2, viewW, viewH, 0x000000, 0.5).setDepth(50));
-    this.stageRoot.add(this.add.text(viewW / 2, viewH / 2 - Math.round(56 * ui),
+    this.stageRoot.add(this.add.text(viewW / 2, titleY,
       gameState.tutorialMode ? '节奏教学完成！' : '节奏结束！',
       {
       fontSize: `${endTitleSize}px`, color: '#ffffff', fontFamily: 'Arial',
     }).setOrigin(0.5).setDepth(51));
-    const gradeText = addGradeText(this, viewW / 2, viewH / 2 - Math.round(6 * ui), grade, {
+    const gradeText = addGradeText(this, viewW / 2, gradeY, grade, {
       depth: 51, fontSize: gradeSize, animate: true,
     });
     this.stageRoot.add(gradeText);
-    this.stageRoot.add(this.add.text(viewW / 2, viewH / 2 + Math.round(38 * ui),
+    this.stageRoot.add(this.add.text(viewW / 2, scoreY,
       gameState.tutorialMode
         ? `获得 ${loot.length} 个教学道具`
         : `节奏分: ${Math.round(this.score)}`,
       {
       fontSize: `${endSubSize}px`, color: '#ffd700', fontFamily: 'Arial', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(51));
-    this.stageRoot.add(this.add.text(viewW / 2, viewH / 2 + Math.round(72 * ui),
+    this.stageRoot.add(this.add.text(viewW / 2, lootY,
       gameState.tutorialMode
         ? `下一步：部署并合成升阶`
         : `获得 ${loot.length} 个道具 · 可合成 ${gameState.run!.mergeUsesLeft} 次`,
