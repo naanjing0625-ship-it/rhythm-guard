@@ -4,6 +4,7 @@ import { createTextButton } from '../ui/HUD';
 import { GameplayGuideOverlay } from '../ui/GameplayGuide';
 import { addRhythmTdBackdrop } from '../ui/RhythmTdChrome';
 import { GAME_WIDTH, GAME_HEIGHT } from '../core/Game';
+import { showDevMenuEntries } from '../core/playtest';
 import { gameState } from '../core/GameState';
 import { saveManager } from '../save/SaveManager';
 
@@ -26,11 +27,25 @@ export class MenuScene extends Phaser.Scene {
       fontSize: '22px', color: RHYTHM_THEME.textMid, fontFamily: 'Arial',
     }).setOrigin(0.5);
 
-    createTextButton(this, GAME_WIDTH / 2, 300, '开始游戏', () => this.scene.start('LevelSelectScene'), RHYTHM_THEME.primary);
-    createTextButton(this, GAME_WIDTH / 2, 365, '新手引导', () => this.startTutorial(), 0xf39c12);
-    createTextButton(this, GAME_WIDTH / 2, 430, '战斗模拟器', () => this.scene.start('BattleSimulatorScene'), 0x27ae60);
-    createTextButton(this, GAME_WIDTH / 2, 495, 'Meta 升级', () => this.scene.start('MetaScene'), RHYTHM_THEME.noteBlue);
-    createTextButton(this, GAME_WIDTH / 2, 560, '玩法说明', () => this.gameplayGuide.show(this), RHYTHM_THEME.noteYellow);
+    const menuEntries: { label: string; onClick: () => void; color: number }[] = [
+      { label: '开始游戏', onClick: () => this.scene.start('LevelSelectScene'), color: RHYTHM_THEME.primary },
+      { label: '新手引导', onClick: () => this.startTutorial(), color: 0xf39c12 },
+    ];
+    if (showDevMenuEntries()) {
+      menuEntries.push(
+        { label: '战斗模拟器', onClick: () => this.scene.start('BattleSimulatorScene'), color: 0x27ae60 },
+        { label: 'Meta 升级', onClick: () => this.scene.start('MetaScene'), color: RHYTHM_THEME.noteBlue },
+      );
+    }
+    menuEntries.push(
+      { label: '玩法说明', onClick: () => this.gameplayGuide.show(this), color: RHYTHM_THEME.noteYellow },
+    );
+
+    const menuStartY = 300;
+    const menuGap = 65;
+    menuEntries.forEach((entry, i) => {
+      createTextButton(this, GAME_WIDTH / 2, menuStartY + i * menuGap, entry.label, entry.onClick, entry.color);
+    });
 
     this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 40, '🟡单击 🔵长按3秒 🔴连击5下 | 律动手牌 | 守护节拍核心', {
       fontSize: '14px', color: RHYTHM_THEME.textMuted, fontFamily: 'Arial',
