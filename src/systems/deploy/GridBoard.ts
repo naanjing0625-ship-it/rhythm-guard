@@ -39,8 +39,20 @@ export class GridBoard {
   }
 
   place(row: number, col: number, item: ItemInstance): boolean {
-    if (!this.canPlace(row, col)) return false;
-    this.cells[row][col].item = item;
+    const target = this.getCell(row, col);
+    if (!target || target.isCore) return false;
+
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const existing = this.cells[r][c].item;
+        if (existing === item || existing?.id === item.id) {
+          this.cells[r][c].item = null;
+        }
+      }
+    }
+
+    if (target.item && target.item.id !== item.id) return false;
+    target.item = item;
     return true;
   }
 

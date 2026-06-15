@@ -70,6 +70,8 @@ export class DeployScene extends Phaser.Scene {
   private inventoryEmptyText: Phaser.GameObjects.Text | null = null;
   private activeDrag: DragState | null = null;
   private selectedItem: ItemInstance | null = null;
+  /** 点击棋盘士兵选中时记录原格，用于移动而非复制 */
+  private pickedFromGridPos: { row: number; col: number } | null = null;
   private infoText!: Phaser.GameObjects.Text;
   private hintText!: Phaser.GameObjects.Text;
   private defenseStarted = false;
@@ -95,6 +97,7 @@ export class DeployScene extends Phaser.Scene {
     this.gridX = (GAME_WIDTH - GRID_SIZE * this.cellSize) / 2;
     this.activeDrag = null;
     this.selectedItem = null;
+    this.pickedFromGridPos = null;
     this.defenseStarted = false;
     this.towerSprites.clear();
     this.inventorySprites = [];
@@ -188,6 +191,7 @@ export class DeployScene extends Phaser.Scene {
     if (this.selectedItem) {
       this.placeFromInventory(row, col, this.selectedItem);
       this.selectedItem = null;
+      this.pickedFromGridPos = null;
       this.redrawTowers();
       this.drawInventory(gameState.run!.loot);
       this.refreshInfo();
@@ -199,6 +203,7 @@ export class DeployScene extends Phaser.Scene {
     if (!cell?.item) return;
     const item = this.board.remove(row, col)!;
     this.selectedItem = item;
+    this.pickedFromGridPos = null;
     this.redrawTowers();
     this.refreshInfo();
     this.hintText.setText(`已选中 ${getItemDef(item.type, item.tier).name}，点击空格放置或合成`);
@@ -214,6 +219,7 @@ export class DeployScene extends Phaser.Scene {
         this.board.place(row, col, item);
         run.loot = takeOneFromLoot(run.loot, item);
       } else {
+        this.clearItemFromBoard(item);
         this.board.place(row, col, item);
       }
       this.hintText.setText('拖拽道具到棋盘，或点击选中后点击空格放置');
@@ -222,6 +228,7 @@ export class DeployScene extends Phaser.Scene {
     }
 
     if (canMerge(item, cell.item) && run.mergeUsesLeft > 0) {
+      this.clearItemFromBoard(item);
       const merged = mergeItems(item, cell.item);
       this.board.remove(row, col);
       this.board.place(row, col, merged);
@@ -336,6 +343,24 @@ export class DeployScene extends Phaser.Scene {
     });
   }
 
+  private clearItemFromBoard(item: ItemInstance): void {
+    if (this.pickedFromGridPos) {
+      const cell = this.board.getCell(this.pickedFromGridPos.row, this.pickedFromGridPos.col);
+      if (cell?.item === item || cell?.item?.id === item.id) {
+        this.board.remove(this.pickedFromGridPos.row, this.pickedFromGridPos.col);
+        return;
+      }
+    }
+    for (let r = 0; r < GRID_SIZE; r++) {
+      for (let c = 0; c < GRID_SIZE; c++) {
+        const existing = this.board.getCell(r, c)?.item;
+        if (existing === item || existing?.id === item.id) {
+          this.board.remove(r, c);
+        }
+      }
+    }
+  }
+
   private setupDraggable(
     sprite: Phaser.GameObjects.Container,
     item: ItemInstance,
@@ -348,11 +373,19 @@ export class DeployScene extends Phaser.Scene {
     sprite.on('pointerdown', () => {
       const stackItems = sprite.getData('stackItems') as ItemInstance[] | undefined;
       const pick = stackItems?.[0] ?? item;
+      if (source === 'grid' && gridPos) {
+        this.selectedItem = pick;
+        this.pickedFromGridPos = { row: gridPos.row, col: gridPos.col };
+        this.hintText.setText(`已选中 ${getItemDef(pick.type, pick.tier).name}，点击空格移动或合成`);
+        return;
+      }
+      this.pickedFromGridPos = null;
       this.selectedItem = pick;
       this.hintText.setText(`已选中 ${getItemDef(pick.type, pick.tier).name} ×${stackItems?.length ?? 1}`);
     });
 
     sprite.on('dragstart', () => {
+      this.pickedFromGridPos = null;
       this.itemTooltip.hide();
       const stackItems = sprite.getData('stackItems') as ItemInstance[] | undefined;
       const dragItem = stackItems?.[0] ?? item;
