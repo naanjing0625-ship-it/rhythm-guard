@@ -12,6 +12,8 @@ export interface LevelThreatProfile {
   flyingRatio: number;
 }
 
+const ALL_ITEM_TYPES: ItemType[] = ['kick', 'snare', 'hihat', 'crash'];
+
 /** 可攻击飞行单位：毒囊炮（溅射）、弧光术（连锁） */
 export const ANTI_AIR_TYPES: ItemType[] = ['snare', 'hihat'];
 
@@ -49,6 +51,13 @@ export function analyzeLevelThreat(levelId: string): LevelThreatProfile {
   };
 }
 
+/** 关卡级掉落倾向（乘到类型权重上） */
+const LEVEL_TYPE_BIAS: Record<string, Partial<Record<ItemType, number>>> = {
+  level_05: { snare: 1.25, hihat: 1.15, kick: 0.75 },
+  level_06: { snare: 1.3, hihat: 1.2, kick: 0.7 },
+  level_07: { snare: 1.55, hihat: 1.45, kick: 0.4, crash: 0.65 },
+};
+
 export function applyThreatToTypeWeights(
   weights: Record<ItemType, number>,
   profile: LevelThreatProfile,
@@ -61,6 +70,20 @@ export function applyThreatToTypeWeights(
     w.hihat *= flyBoost;
     w.kick *= 0.6;
     w.crash *= 0.72;
+  }
+
+  if (profile.flyingRatio >= 0.15 || profile.flyingUnits >= 8) {
+    w.snare *= 1.25;
+    w.hihat *= 1.2;
+    w.kick *= 0.5;
+    w.crash *= 0.68;
+  }
+
+  const levelBias = LEVEL_TYPE_BIAS[profile.levelId];
+  if (levelBias) {
+    for (const type of ALL_ITEM_TYPES) {
+      if (levelBias[type] != null) w[type] *= levelBias[type]!;
+    }
   }
 
   if (profile.armoredUnits >= 4) {
@@ -82,16 +105,33 @@ export function applyThreatToTypeWeights(
   return w;
 }
 
+/** 关卡保底对空道具数（覆盖通用公式） */
+const LEVEL_ANTI_AIR_FLOOR: Record<string, number> = {
+  level_05: 2,
+  level_06: 3,
+  level_07: 6,
+};
+
 /** 按关卡飞行怪数量保证最低对空道具数 */
-export function minAntiAirItems(profile: LevelThreatProfile): number {
+export function minAntiAirItems(profile: LevelThreatProfile, totalCount = 0): number {
   if (profile.flyingUnits === 0) return 0;
-  if (profile.flyingUnits <= 4) return 1;
-  if (profile.flyingUnits <= 8) return 2;
-  return Math.min(4, Math.ceil(profile.flyingUnits / 3));
+  let min = 0;
+  if (profile.flyingUnits <= 4) min = 1;
+  else if (profile.flyingUnits <= 8) min = 2;
+  else min = Math.min(5, Math.ceil(profile.flyingUnits / 3));
+
+  const floor = LEVEL_ANTI_AIR_FLOOR[profile.levelId];
+  if (floor != null) min = Math.max(min, floor);
+
+  if (totalCount > 0 && profile.flyingRatio >= 0.12) {
+    min = Math.max(min, Math.ceil(totalCount * 0.35));
+  }
+
+  return Math.min(totalCount || min, min);
 }
 
 export function rebalanceLootForThreat(types: ItemType[], profile: LevelThreatProfile): ItemType[] {
-  const required = minAntiAirItems(profile);
+  const required = minAntiAirItems(profile, types.length);
   if (required <= 0) return types;
 
   const result = [...types];

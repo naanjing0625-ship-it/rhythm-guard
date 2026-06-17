@@ -41,8 +41,8 @@ export const LEVEL_LOOT_BY_GRADE: Record<string, Record<AccuracyGrade, number>> 
   level_04: { B: 8, A: 10, S: 14, SS: 17, SSS: 19 },
   level_05: { B: 8, A: 10, S: 15, SS: 17, SSS: 20 },
   level_06: { B: 7, A: 10, S: 15, SS: 18, SSS: 20 },
-  level_07: { B: 7, A: 9, S: 15, SS: 18, SSS: 21 },
-  level_08: { B: 7, A: 10, S: 17, SS: 20, SSS: 21 },
+  level_07: { B: 7, A: 10, S: 17, SS: 19, SSS: 21 },
+  level_08: { B: 7, A: 13, S: 20, SS: 22, SSS: 25 },
 };
 
 /** 每关核心修复次数上限 */
@@ -54,8 +54,8 @@ export const LEVEL_REPAIR_LIMITS: Record<string, number> = {
   level_04: 2,
   level_05: 2,
   level_06: 2,
-  level_07: 3,
-  level_08: 4,
+  level_07: 4,
+  level_08: 5,
 };
 
 export function getLevelRepairLimit(levelId: string): number {

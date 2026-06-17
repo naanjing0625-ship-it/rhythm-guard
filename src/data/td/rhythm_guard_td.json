@@ -476,9 +476,9 @@
     "warlord": {
       "type": "warlord",
       "name": "传奇英雄",
-      "hp": 1650,
-      "speed": 20,
-      "damage": 32,
+      "hp": 620,
+      "speed": 18,
+      "damage": 15,
       "reward": 80,
       "color": 9579297,
       "size": 32,
@@ -490,7 +490,7 @@
       "abilities": [
         {
           "id": "enrage",
-          "thresholdHpRatio": 0.35,
+          "thresholdHpRatio": 0.22,
           "speedMult": 1.45,
           "damageMult": 1.35
         }
@@ -669,18 +669,16 @@
     "warlord_finale_soft": {
       "id": "warlord_finale_soft",
       "name": "传奇降临",
+      "bossFinale": true,
+      "bossHpMult": 0.3,
+      "bossDamageMult": 0.7,
       "delayBefore": 3600,
-      "threatBudget": 240,
+      "threatBudget": 200,
       "enemies": [
         {
           "type": "warlord",
           "count": 1,
           "interval": 0
-        },
-        {
-          "type": "grunt",
-          "count": 2,
-          "interval": 1500
         }
       ]
     }
@@ -744,8 +742,8 @@
       ]
     },
     "level_07": {
-      "coreHp": 78,
-      "scaling": { "hp": 1.28, "damage": 1.16, "speed": 1.04 },
+      "coreHp": 82,
+      "scaling": { "hp": 1.27, "damage": 1.15, "speed": 1.04 },
       "waves": [
         "wolf_rush",
         "sky_assault",
@@ -754,8 +752,8 @@
       ]
     },
     "level_08": {
-      "coreHp": 96,
-      "scaling": { "hp": 1.12, "damage": 1.08, "speed": 1.02 },
+      "coreHp": 112,
+      "scaling": { "hp": 1.0, "damage": 1.05, "speed": 1.02 },
       "waves": [
         "shield_wall",
         "shaman_support",

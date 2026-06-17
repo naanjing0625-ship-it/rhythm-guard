@@ -1,4 +1,4 @@
-import { applySlow, damageEnemy, getEnemyCoreDamage, type EnemyState } from './Enemy';
+import { applySlow, damageEnemy, getEnemyCoreDamage, isBossEnemy, type EnemyState } from './Enemy';
 import { getTowerStats, type TowerState } from './Tower';
 import type { AttackMode } from '../../config/tdContent';
 
@@ -24,6 +24,13 @@ export interface CombatResult {
   attacks: AttackEvent[];
 }
 
+const BOSS_SIEGE_INTERVAL_SEC = 4.2;
+/** Boss 围攻核心的伤害倍率（低于普通漏怪，给玩家反应与修复窗口） */
+const BOSS_SIEGE_DAMAGE_MULT = 0.32;
+const BOSS_SIEGE_GRACE_SEC = 2.2;
+/** 终局 Boss 战阶段，塔对 Boss 额外伤害倍率 */
+const BOSS_FINALE_TOWER_DAMAGE_MULT = 1.6;
+
 export class CombatSystem {
   update(
     towers: TowerState[],
@@ -33,6 +40,7 @@ export class CombatSystem {
     coreY: number,
     coreRadius: number,
     shield: number,
+    bossFinaleActive = false,
   ): CombatResult {
     const towerKilled: EnemyState[] = [];
     const coreReached: EnemyState[] = [];
@@ -57,7 +65,7 @@ export class CombatSystem {
 
       if (stats.attackMode === 'melee') {
         const target = nearest(tower, targets);
-        const hit = damageEnemy(target, stats.damage, stats.damageType);
+        const hit = damageEnemy(target, towerDamage(target, stats.damage, bossFinaleActive), stats.damageType);
         if (hit.killed) towerKilled.push(target);
         let appliedSlow = false;
         if (stats.slowPercent && stats.slowDurationSec) {
@@ -82,7 +90,7 @@ export class CombatSystem {
         let totalDealt = 0;
         let anyResisted = false;
         for (const t of splash) {
-          const hit = damageEnemy(t, stats.damage, stats.damageType);
+          const hit = damageEnemy(t, towerDamage(t, stats.damage, bossFinaleActive), stats.damageType);
           totalDealt += hit.dealt;
           anyResisted = anyResisted || hit.resisted;
           if (hit.killed) towerKilled.push(t);
@@ -111,7 +119,7 @@ export class CombatSystem {
         while (chains > 0 && current) {
           if (hit.has(current.id)) break;
           hit.add(current.id);
-          const result = damageEnemy(current, stats.damage, stats.damageType);
+          const result = damageEnemy(current, towerDamage(current, stats.damage, bossFinaleActive), stats.damageType);
           totalDealt += result.dealt;
           anyResisted = anyResisted || result.resisted;
           if (result.killed) towerKilled.push(current);
@@ -141,17 +149,38 @@ export class CombatSystem {
 
     for (const enemy of enemies) {
       if (!enemy.alive) continue;
-      if (dist(enemy.x, enemy.y, coreX, coreY) <= coreRadius) {
-        let dmg = getEnemyCoreDamage(enemy);
+      if (dist(enemy.x, enemy.y, coreX, coreY) > coreRadius) continue;
+
+      if (isBossEnemy(enemy)) {
+        pinEnemyAtCore(enemy, coreX, coreY, coreRadius);
+        if (!enemy.siegingCore) {
+          enemy.siegingCore = true;
+          enemy.coreSiegeCooldownSec = BOSS_SIEGE_GRACE_SEC;
+          continue;
+        }
+        enemy.coreSiegeCooldownSec = (enemy.coreSiegeCooldownSec ?? 0) - deltaSec;
+        if (enemy.coreSiegeCooldownSec > 0) continue;
+
+        enemy.coreSiegeCooldownSec = BOSS_SIEGE_INTERVAL_SEC;
+        let dmg = getBossCoreSiegeDamage(enemy);
         if (shield > 0) {
           const absorbed = Math.min(shield, dmg);
           shieldAbsorbed += absorbed;
           dmg -= absorbed;
         }
         coreDamage += dmg;
-        enemy.alive = false;
-        coreReached.push(enemy);
+        continue;
       }
+
+      let dmg = getEnemyCoreDamage(enemy);
+      if (shield > 0) {
+        const absorbed = Math.min(shield, dmg);
+        shieldAbsorbed += absorbed;
+        dmg -= absorbed;
+      }
+      coreDamage += dmg;
+      enemy.alive = false;
+      coreReached.push(enemy);
     }
 
     return { towerKilled, coreReached, coreDamage, shieldAbsorbed, attacks };
@@ -169,6 +198,28 @@ export class CombatSystem {
 
 function dist(x1: number, y1: number, x2: number, y2: number): number {
   return Math.hypot(x2 - x1, y2 - y1);
+}
+
+function pinEnemyAtCore(
+  enemy: EnemyState,
+  coreX: number,
+  coreY: number,
+  coreRadius: number,
+): void {
+  const dx = enemy.x - coreX;
+  const dy = enemy.y - coreY;
+  const len = Math.hypot(dx, dy) || 1;
+  enemy.x = coreX + (dx / len) * coreRadius;
+  enemy.y = coreY + (dy / len) * coreRadius;
+}
+
+function getBossCoreSiegeDamage(enemy: EnemyState): number {
+  return Math.max(1, Math.round(getEnemyCoreDamage(enemy) * BOSS_SIEGE_DAMAGE_MULT));
+}
+
+function towerDamage(enemy: EnemyState, raw: number, bossFinaleActive: boolean): number {
+  if (!bossFinaleActive || !isBossEnemy(enemy)) return raw;
+  return Math.round(raw * BOSS_FINALE_TOWER_DAMAGE_MULT);
 }
 
 function nearest(tower: TowerState, targets: EnemyState[]): EnemyState {

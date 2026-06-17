@@ -6,13 +6,13 @@
       "Kingdom Rush",
       "Bloons TD 6"
     ],
-    "designNotes": "节奏四轨映射：Kick=节拍拳近战 | Snare=毒囊溅射 | Hihat=弧光连锁 | Crash=岩盾护堡；敌人=入侵英雄",
+    "designNotes": "节奏四轨映射：Kick=节拍拳近战 | Snare=毒囊溅射 | Hihat=弧光连锁 | Crash=凝霜律减速；敌人=入侵英雄",
     "shroomGuardMapping": {
       "towers": {
         "kick": "节拍拳 — 近战单体（Kick）",
         "snare": "毒囊炮 — 范围毒爆（Snare）",
         "hihat": "弧光术 — 弹射连锁（Hi-hat）",
-        "crash": "岩盾仪 — 城堡护盾（Crash）"
+        "crash": "凝霜律 — 近战减速（Crash）"
       },
       "enemies": {
         "goblin": "见习勇者 — 人海",
@@ -71,9 +71,9 @@
       "defaultEdge": "random"
     },
     "scaling": {
-      "hpPerWave": 0.22,
-      "damagePerWave": 0.2,
-      "speedPerWave": 0.04,
+      "hpPerWave": 0.16,
+      "damagePerWave": 0.13,
+      "speedPerWave": 0.025,
       "rewardPerWave": 0.08
     },
     "economy": {
@@ -81,7 +81,7 @@
       "waveClearBonus": 15,
       "sellRefundRatio": 0.55,
       "repairCost": 20,
-      "repairHp": 15
+      "repairHp": 20
     },
     "armorRules": {
       "light": {
@@ -141,7 +141,15 @@
       "mode": "shield",
       "damageType": "true",
       "targeting": "core",
-      "description": "岩盾仪 — 战斗前为核心提供护盾"
+      "description": "（已废弃）"
+    },
+    "melee_slow": {
+      "id": "melee_slow",
+      "name": "凝霜近战",
+      "mode": "melee",
+      "damageType": "magic",
+      "targeting": "nearest",
+      "description": "凝霜律 — 近战单体并减速，无法打飞行"
     }
   },
   "towers": {
@@ -266,42 +274,46 @@
     },
     "crash": {
       "family": "crash",
-      "role": "岩盾仪·核心护盾",
+      "role": "凝霜律·近战减速",
       "shroomGuardAnalogue": "Rock Shroom",
-      "attackId": "shield_barrier",
-      "color": 10181046,
+      "attackId": "melee_slow",
+      "color": 6131938,
       "tiers": [
         {
           "tier": 1,
-          "name": "碎石护符",
-          "damage": 0,
-          "range": 0,
-          "attackSpeed": 0,
-          "shieldAmount": 12
+          "name": "霜步拳手",
+          "damage": 5,
+          "range": 74,
+          "attackSpeed": 1.0,
+          "slowPercent": 0.3,
+          "slowDurationSec": 2.5
         },
         {
           "tier": 2,
-          "name": "岩盾结界",
-          "damage": 0,
-          "range": 0,
-          "attackSpeed": 0,
-          "shieldAmount": 20
+          "name": "寒触卫士",
+          "damage": 9,
+          "range": 78,
+          "attackSpeed": 1.08,
+          "slowPercent": 0.38,
+          "slowDurationSec": 2.8
         },
         {
           "tier": 3,
-          "name": "节拍壁垒",
-          "damage": 0,
-          "range": 0,
-          "attackSpeed": 0,
-          "shieldAmount": 34
+          "name": "凝滞冲锋",
+          "damage": 16,
+          "range": 82,
+          "attackSpeed": 1.16,
+          "slowPercent": 0.45,
+          "slowDurationSec": 3.0
         },
         {
           "tier": 4,
-          "name": "不朽鸣墙",
-          "damage": 0,
-          "range": 0,
-          "attackSpeed": 0,
-          "shieldAmount": 57
+          "name": "永冻禁卫",
+          "damage": 28,
+          "range": 86,
+          "attackSpeed": 1.24,
+          "slowPercent": 0.52,
+          "slowDurationSec": 3.5
         }
       ]
     }
@@ -464,9 +476,9 @@
     "warlord": {
       "type": "warlord",
       "name": "传奇英雄",
-      "hp": 1650,
-      "speed": 20,
-      "damage": 32,
+      "hp": 620,
+      "speed": 18,
+      "damage": 15,
       "reward": 80,
       "color": 9579297,
       "size": 32,
@@ -478,7 +490,7 @@
       "abilities": [
         {
           "id": "enrage",
-          "thresholdHpRatio": 0.35,
+          "thresholdHpRatio": 0.22,
           "speedMult": 1.45,
           "damageMult": 1.35
         }
@@ -487,6 +499,19 @@
     }
   },
   "waveTemplates": {
+    "tutorial_guard": {
+      "id": "tutorial_guard",
+      "name": "见习来犯",
+      "delayBefore": 2500,
+      "threatBudget": 52,
+      "enemies": [
+        {
+          "type": "goblin",
+          "count": 10,
+          "interval": 650
+        }
+      ]
+    },
     "tutorial_swarm": {
       "id": "tutorial_swarm",
       "name": "勇者先遣",
@@ -622,7 +647,7 @@
       "id": "warlord_finale",
       "name": "传奇降临",
       "delayBefore": 3200,
-      "threatBudget": 384,
+      "threatBudget": 320,
       "enemies": [
         {
           "type": "warlord",
@@ -631,40 +656,67 @@
         },
         {
           "type": "grunt",
-          "count": 10,
-          "interval": 650
+          "count": 4,
+          "interval": 800
         },
         {
           "type": "flyer",
-          "count": 6,
-          "interval": 850
+          "count": 3,
+          "interval": 1000
+        }
+      ]
+    },
+    "warlord_finale_soft": {
+      "id": "warlord_finale_soft",
+      "name": "传奇降临",
+      "bossFinale": true,
+      "bossHpMult": 0.3,
+      "bossDamageMult": 0.7,
+      "delayBefore": 3600,
+      "threatBudget": 200,
+      "enemies": [
+        {
+          "type": "warlord",
+          "count": 1,
+          "interval": 0
         }
       ]
     }
   },
   "levels": {
+    "level_tutorial": {
+      "coreHp": 60,
+      "scaling": { "hp": 1.0, "damage": 1.0, "speed": 1.0 },
+      "waves": [
+        "tutorial_guard"
+      ]
+    },
     "level_01": {
-      "coreHp": 42,
+      "coreHp": 50,
+      "scaling": { "hp": 1.0, "damage": 1.0, "speed": 1.0 },
       "waves": [
         "tutorial_swarm"
       ]
     },
     "level_02": {
-      "coreHp": 43,
+      "coreHp": 52,
+      "scaling": { "hp": 1.06, "damage": 1.04, "speed": 1.0 },
       "waves": [
         "tutorial_swarm",
         "wolf_rush"
       ]
     },
     "level_03": {
-      "coreHp": 49,
+      "coreHp": 58,
+      "scaling": { "hp": 1.10, "damage": 1.06, "speed": 1.02 },
       "waves": [
         "tutorial_swarm",
         "shield_wall"
       ]
     },
     "level_04": {
-      "coreHp": 53,
+      "coreHp": 60,
+      "scaling": { "hp": 1.16, "damage": 1.08, "speed": 1.03 },
       "waves": [
         "wolf_rush",
         "wolf_rush",
@@ -672,16 +724,17 @@
       ]
     },
     "level_05": {
-      "coreHp": 60,
+      "coreHp": 72,
+      "scaling": { "hp": 1.16, "damage": 1.06, "speed": 1.02 },
       "waves": [
         "tutorial_swarm",
         "sky_assault",
-        "shield_wall",
-        "sky_assault"
+        "shield_wall"
       ]
     },
     "level_06": {
-      "coreHp": 59,
+      "coreHp": 68,
+      "scaling": { "hp": 1.22, "damage": 1.10, "speed": 1.03 },
       "waves": [
         "sky_assault",
         "shaman_support",
@@ -689,22 +742,23 @@
       ]
     },
     "level_07": {
-      "coreHp": 65,
+      "coreHp": 82,
+      "scaling": { "hp": 1.27, "damage": 1.15, "speed": 1.04 },
       "waves": [
-        "shadow_blitz",
+        "wolf_rush",
         "sky_assault",
-        "brute_siege",
-        "shaman_support"
+        "shaman_support",
+        "shield_wall"
       ]
     },
     "level_08": {
-      "coreHp": 78,
+      "coreHp": 112,
+      "scaling": { "hp": 1.0, "damage": 1.05, "speed": 1.02 },
       "waves": [
-        "shadow_blitz",
-        "brute_siege",
+        "shield_wall",
         "shaman_support",
         "sky_assault",
-        "warlord_finale"
+        "warlord_finale_soft"
       ]
     }
   }

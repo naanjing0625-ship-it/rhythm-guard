@@ -1,7 +1,7 @@
 /**
  * 无 Phaser 的塔防平衡模拟：按评级生成掉落 → 自动合成 → 均匀布阵 → 跑完整波次。
  */
-import { getScaledEnemy } from '../config/enemies';
+import { applyBossFinaleModifiers, getScaledEnemy } from '../config/enemies';
 import {
   CORE_CELLS,
   getCorePixelPosition,
@@ -23,6 +23,7 @@ import { updateEnemyAbilities } from '../systems/defense/EnemyAbilities';
 import {
   createEnemy,
   getEnemyMoveSpeed,
+  isBossEnemy,
   tickEnemySlow,
   type EnemyState,
 } from '../systems/defense/Enemy';
@@ -52,6 +53,7 @@ export interface SimTrialResult {
   coreHpLeft: number;
   coreHpMax: number;
   repairCount: number;
+  stars: number;
 }
 
 export interface SimSummary {
@@ -61,9 +63,19 @@ export interface SimSummary {
   wins: number;
   passRate: number;
   avgCoreHpRatio: number;
+  avgCoreHpRatioOnWin: number;
+  avgCoreHpLeftOnWin: number;
+  avgStarsOnWin: number;
+  starDistributionOnWin: Record<1 | 2 | 3, number>;
   avgRepairCount: number;
   avgRepairCountOnWin: number;
   repairLimit: number;
+}
+
+export function starsFromCoreHpRatio(ratio: number): 1 | 2 | 3 {
+  if (ratio > 0.8) return 3;
+  if (ratio > 0.5) return 2;
+  return 1;
 }
 
 /** 简易可复现 RNG（LCG） */
@@ -164,6 +176,7 @@ function spawnPosition(rng: () => number): { x: number; y: number } {
 function moveEnemies(enemies: EnemyState[], deltaSec: number): void {
   for (const enemy of enemies) {
     if (!enemy.alive) continue;
+    if (enemy.siegingCore) continue;
     tickEnemySlow(enemy, deltaSec);
     const dx = CORE_POS.x - enemy.x;
     const dy = CORE_POS.y - enemy.y;
@@ -176,11 +189,18 @@ function moveEnemies(enemies: EnemyState[], deltaSec: number): void {
   }
 }
 
+export interface SimTrialOptions {
+  /** 核心低于 35% 且音律币足够时自动修复（默认开启） */
+  autoRepair?: boolean;
+}
+
 export function simulateTrial(
   levelId: string,
   grade: AccuracyGrade,
   rng: () => number,
+  options: SimTrialOptions = {},
 ): SimTrialResult {
+  const autoRepair = options.autoRepair ?? true;
   const level = LEVELS.find((l) => l.id === levelId);
   if (!level) throw new Error(`Unknown level: ${levelId}`);
 
@@ -218,6 +238,8 @@ export function simulateTrial(
   const enemies: EnemyState[] = [];
   let elapsed = 0;
   let repairCount = 0;
+  let bossFinalePending = false;
+  let bossPhaseActive = false;
 
   const tryRepair = (): void => {
     if (repairCount >= repairLimit) return;
@@ -247,13 +269,28 @@ export function simulateTrial(
     const deltaSec = DT_MS / 1000;
 
     const waveResult = waveManager.update(DT_MS, (type, waveIdx) => {
-      const def = getScaledEnemy(type, waveIdx, levelScaling);
+      const wave = level.waves[waveIdx];
+      const def = applyBossFinaleModifiers(
+        getScaledEnemy(type, waveIdx, levelScaling),
+        wave,
+      );
       const pos = spawnPosition(rng);
       return createEnemy(def, pos.x, pos.y);
     });
 
+    if (waveResult.waveStarted !== null) {
+      const wave = level.waves[waveResult.waveStarted];
+      if (wave?.bossFinale) {
+        bossFinalePending = true;
+        bossPhaseActive = true;
+      }
+    }
+
     for (const event of waveResult.spawned) {
       enemies.push(event.enemy);
+      if (bossFinalePending && isBossEnemy(event.enemy)) {
+        bossFinalePending = false;
+      }
     }
 
     if (waveResult.waveSpawnFinished !== null) {
@@ -271,6 +308,7 @@ export function simulateTrial(
       CORE_POS.y,
       CORE_RADIUS,
       shield,
+      bossPhaseActive,
     );
 
     if (result.shieldAbsorbed > 0) {
@@ -293,21 +331,32 @@ export function simulateTrial(
     }
 
     tryWaveBonus();
-    tryRepair();
+    if (autoRepair) tryRepair();
 
     if (coreHp <= 0) {
-      return { win: false, coreHpLeft: 0, coreHpMax, repairCount };
+      return { win: false, coreHpLeft: 0, coreHpMax, repairCount, stars: 0 };
     }
 
     if (waveManager.isDone && enemies.every((e) => !e.alive)) {
+      if (bossFinalePending) {
+        elapsed += DT_MS;
+        continue;
+      }
       tryWaveBonus();
-      return { win: true, coreHpLeft: coreHp, coreHpMax, repairCount };
+      const ratio = coreHp / coreHpMax;
+      return {
+        win: true,
+        coreHpLeft: coreHp,
+        coreHpMax,
+        repairCount,
+        stars: starsFromCoreHpRatio(ratio),
+      };
     }
 
     elapsed += DT_MS;
   }
 
-  return { win: false, coreHpLeft: coreHp, coreHpMax, repairCount };
+  return { win: false, coreHpLeft: coreHp, coreHpMax, repairCount, stars: 0 };
 }
 
 export function runLevelGradeSim(
@@ -318,6 +367,10 @@ export function runLevelGradeSim(
 ): SimSummary {
   let wins = 0;
   let hpRatioSum = 0;
+  let hpRatioSumOnWin = 0;
+  let hpLeftSumOnWin = 0;
+  let starsSumOnWin = 0;
+  const starDistributionOnWin: Record<1 | 2 | 3, number> = { 1: 0, 2: 0, 3: 0 };
   let repairSum = 0;
   let repairSumOnWin = 0;
 
@@ -327,6 +380,10 @@ export function runLevelGradeSim(
     if (result.win) {
       wins++;
       repairSumOnWin += result.repairCount;
+      hpRatioSumOnWin += result.coreHpLeft / result.coreHpMax;
+      hpLeftSumOnWin += result.coreHpLeft;
+      starsSumOnWin += result.stars;
+      starDistributionOnWin[result.stars as 1 | 2 | 3]++;
     }
     hpRatioSum += result.coreHpLeft / result.coreHpMax;
     repairSum += result.repairCount;
@@ -339,6 +396,10 @@ export function runLevelGradeSim(
     wins,
     passRate: wins / trials,
     avgCoreHpRatio: hpRatioSum / trials,
+    avgCoreHpRatioOnWin: wins > 0 ? hpRatioSumOnWin / wins : 0,
+    avgCoreHpLeftOnWin: wins > 0 ? hpLeftSumOnWin / wins : 0,
+    avgStarsOnWin: wins > 0 ? starsSumOnWin / wins : 0,
+    starDistributionOnWin,
     avgRepairCount: repairSum / trials,
     avgRepairCountOnWin: wins > 0 ? repairSumOnWin / wins : 0,
     repairLimit: getLevelRepairLimit(levelId),

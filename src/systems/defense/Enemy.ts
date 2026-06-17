@@ -16,6 +16,14 @@ export interface EnemyState {
   healTimerMs: number;
   slowRemainingSec: number;
   slowStrength: number;
+  /** Boss 抵达核心后持续围攻，不会被「漏怪」逻辑移除 */
+  siegingCore?: boolean;
+  coreSiegeCooldownSec?: number;
+}
+
+export function isBossEnemy(enemy: EnemyState | EnemyDef): boolean {
+  const def = 'def' in enemy ? enemy.def : enemy;
+  return def.armorType === 'boss' || !!def.tags?.includes('boss');
 }
 
 let enemyIdCounter = 0;

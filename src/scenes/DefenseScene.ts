@@ -8,7 +8,8 @@ import { CombatSystem } from '../systems/defense/CombatSystem';
 import { combatSfx } from '../systems/defense/CombatSfxEngine';
 import { playAttackVfx, pulseTower } from '../systems/defense/CombatVfx';
 import { updateEnemyAbilities } from '../systems/defense/EnemyAbilities';
-import { createEnemy, getEnemyMoveSpeed, isEnemySlowed, tickEnemySlow, type EnemyState } from '../systems/defense/Enemy';
+import { createEnemy, getEnemyMoveSpeed, isBossEnemy, isEnemySlowed, tickEnemySlow, type EnemyState } from '../systems/defense/Enemy';
+import { applyBossFinaleModifiers } from '../config/enemies';
 import { getScaledEnemy, WaveManager } from '../systems/defense/WaveManager';
 import { createTowerState, type TowerState } from '../systems/defense/Tower';
 import { getRunChapterCoreVisual, getRunDefenseBgmProfile } from '../config/chapterDefense';
@@ -62,6 +63,13 @@ export class DefenseScene extends Phaser.Scene {
   private tutorialCoach = new TutorialCoach();
   private tutorialCoachLayout = landscapeCoachLayout(650);
   private cleanedUp = false;
+  private bossPhaseActive = false;
+  private bossFinalePending = false;
+  private bossSiegeWarned = false;
+  private bossEnemyId: string | null = null;
+  private bossBarFill: Phaser.GameObjects.Rectangle | null = null;
+  private bossBarBg: Phaser.GameObjects.Rectangle | null = null;
+  private bossBarLabel: Phaser.GameObjects.Text | null = null;
 
   constructor() {
     super('DefenseScene');
@@ -80,6 +88,13 @@ export class DefenseScene extends Phaser.Scene {
     this.wavesRewarded = new Set();
     this.animTime = 0;
     this.repairBtnCanUse = true;
+    this.bossPhaseActive = false;
+    this.bossFinalePending = false;
+    this.bossSiegeWarned = false;
+    this.bossEnemyId = null;
+    this.bossBarFill = null;
+    this.bossBarBg = null;
+    this.bossBarLabel = null;
   }
 
   create(): void {
@@ -121,9 +136,7 @@ export class DefenseScene extends Phaser.Scene {
 
     this.waveManager = new WaveManager(this.levelWaves);
     combatSfx.setVolume(gameState.save?.settings.volume ?? 0.8);
-    void combatSfx.ensureReady().then(() => {
-      combatSfx.startBattleBgm(getRunDefenseBgmProfile());
-    });
+    void this.kickBattleBgm();
 
     this.waveText = this.add.text(20, 48, '', { ...TD_HUD_STYLE }).setDepth(290);
     this.goldText = this.add.text(GAME_WIDTH - 20, 48, '', {
@@ -172,7 +185,11 @@ export class DefenseScene extends Phaser.Scene {
     this.animTime += deltaSec;
 
     const waveResult = this.waveManager.update(deltaMs, (type, waveIdx) => {
-      const def = getScaledEnemy(type, waveIdx, this.levelScaling);
+      const wave = this.levelWaves[waveIdx];
+      const def = applyBossFinaleModifiers(
+        getScaledEnemy(type, waveIdx, this.levelScaling),
+        wave,
+      );
       const pos = this.getSpawnPosition();
       return createEnemy(def, pos.x, pos.y);
     });
@@ -181,6 +198,11 @@ export class DefenseScene extends Phaser.Scene {
       const idx = waveResult.waveStarted;
       eventBus.emit(Events.WAVE_START, idx + 1);
       this.announceWave(idx);
+      void this.kickBattleBgm();
+      if (this.levelWaves[idx]?.bossFinale) {
+        this.bossPhaseActive = true;
+        this.bossFinalePending = true;
+      }
     }
 
     if (waveResult.waveSpawnFinished !== null) {
@@ -191,6 +213,9 @@ export class DefenseScene extends Phaser.Scene {
       this.enemies.push(event.enemy);
       this.createEnemySprite(event.enemy);
       this.flashSpawnPoint(event.enemy.x, event.enemy.y);
+      if (this.bossPhaseActive && isBossEnemy(event.enemy)) {
+        this.trackBossEnemy(event.enemy);
+      }
     }
 
     if (this.waveManager.isDone) this.allWavesSpawned = true;
@@ -217,6 +242,7 @@ export class DefenseScene extends Phaser.Scene {
       this.coreY,
       this.coreRadius,
       this.shield,
+      this.bossPhaseActive,
     );
 
     this.shield = Math.max(0, this.shield - result.shieldAbsorbed);
@@ -242,6 +268,10 @@ export class DefenseScene extends Phaser.Scene {
       eventBus.emit(Events.CORE_DAMAGED, result.coreDamage);
       this.flashCore(0xe74c3c);
       combatSfx.playCoreHurt(result.coreDamage);
+      if (this.bossPhaseActive && this.enemies.some((e) => e.alive && e.siegingCore) && !this.bossSiegeWarned) {
+        this.bossSiegeWarned = true;
+        this.showToast('Boss 正在围攻核心！优先击杀', RHYTHM_THEME.noteRed, 2200);
+      }
     }
     run.coreHp -= result.coreDamage;
 
@@ -254,6 +284,10 @@ export class DefenseScene extends Phaser.Scene {
       eventBus.emit(Events.ENEMY_KILLED, killed);
       this.removeEnemySprite(killed.id);
       this.removeHealerAura(killed.id);
+      if (this.bossEnemyId === killed.id) {
+        this.hideBossBar();
+        this.showToast('传奇英雄已击破！', 0xd4a017, 2200);
+      }
     }
 
     this.tryShowRepairTutorial(run);
@@ -281,6 +315,7 @@ export class DefenseScene extends Phaser.Scene {
     }
 
     if (this.allWavesSpawned && this.enemies.length === 0) {
+      if (this.bossFinalePending) return;
       run.victory = true;
       if (gameState.simulatorMode) {
         gameState.simulatorMode = false;
@@ -359,7 +394,14 @@ export class DefenseScene extends Phaser.Scene {
     if (!wave) return;
     const title = wave.templateName ?? `第 ${waveIdx + 1} 波`;
     const briefing = this.formatWaveBriefing(wave);
-    this.showToast(`【${title}】${briefing}`, RHYTHM_THEME.noteRed, 2800);
+    if (wave.bossFinale) {
+      this.showToast('【终局 Boss 战】传奇英雄降临！', 0xd4a017, 3200);
+      this.time.delayedCall(900, () => {
+        this.showToast('击破 Boss 才能胜利 — 漏到核心只会持续扣血', RHYTHM_THEME.noteRed, 3400);
+      });
+    } else {
+      this.showToast(`【${title}】${briefing}`, RHYTHM_THEME.noteRed, 2800);
+    }
     this.tipText.setText(briefing);
 
     const hasFlyer = wave.enemies.some((g) => ENEMY_DEFS[g.type]?.flying);
@@ -420,6 +462,7 @@ export class DefenseScene extends Phaser.Scene {
     for (const enemy of this.enemies) {
       if (!enemy.alive) continue;
       tickEnemySlow(enemy, deltaSec);
+      if (enemy.siegingCore) continue;
       const dx = this.coreX - enemy.x;
       const dy = this.coreY - enemy.y;
       const dist = Math.hypot(dx, dy);
@@ -429,6 +472,44 @@ export class DefenseScene extends Phaser.Scene {
         enemy.y += (dy / dist) * speed * deltaSec;
       }
     }
+  }
+
+  private trackBossEnemy(enemy: EnemyState): void {
+    this.bossFinalePending = false;
+    this.bossEnemyId = enemy.id;
+    this.showBossBar(enemy);
+  }
+
+  private showBossBar(enemy: EnemyState): void {
+    this.hideBossBar();
+    const bar = createRhythmProgressBar(this, GAME_WIDTH / 2, 72, 360, 14);
+    this.bossBarBg = bar.bg;
+    this.bossBarFill = bar.fill;
+    this.bossBarFill.fillColor = RHYTHM_THEME.noteRed;
+    this.bossBarLabel = this.add.text(GAME_WIDTH / 2, 58, `👑 ${enemy.def.name}`, {
+      fontSize: '13px',
+      color: RHYTHM_THEME.textGold,
+      fontFamily: 'Arial',
+      fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(292);
+    this.updateBossBar(enemy);
+  }
+
+  private updateBossBar(enemy: EnemyState): void {
+    if (!this.bossBarFill) return;
+    const ratio = Math.max(0, enemy.hp / enemy.maxHp);
+    this.bossBarFill.width = 360 * ratio;
+    this.bossBarFill.fillColor = ratio > 0.35 ? RHYTHM_THEME.noteRed : RHYTHM_THEME.hpDanger;
+  }
+
+  private hideBossBar(): void {
+    this.bossBarBg?.destroy();
+    this.bossBarFill?.destroy();
+    this.bossBarLabel?.destroy();
+    this.bossBarBg = null;
+    this.bossBarFill = null;
+    this.bossBarLabel = null;
+    this.bossEnemyId = null;
   }
 
   private createEnemySprite(enemy: EnemyState): void {
@@ -563,9 +644,11 @@ export class DefenseScene extends Phaser.Scene {
   private updateHud(): void {
     const run = gameState.run!;
     const alive = this.enemies.filter((e) => e.alive).length;
+    const waveLabel = this.bossPhaseActive
+      ? `终局 Boss | 敌人 ${alive}`
+      : `波次 ${this.waveManager.currentWave}/${this.waveManager.totalWaves} | 敌人 ${alive}`;
     this.waveText.setText(
-      `波次 ${this.waveManager.currentWave}/${this.waveManager.totalWaves} | 敌人 ${alive}`
-      + `${this.shield > 0 ? ` | 护盾 ${Math.round(this.shield)}` : ''}`,
+      waveLabel + `${this.shield > 0 ? ` | 护盾 ${Math.round(this.shield)}` : ''}`,
     );
     this.goldText.setText(`♪ ${run.defenseGold} | 击退 ${run.killCount}`);
     const ratio = Math.max(0, run.coreHp / run.coreMaxHp);
@@ -579,6 +662,11 @@ export class DefenseScene extends Phaser.Scene {
     if (canRepair !== this.repairBtnCanUse) {
       this.repairBtnCanUse = canRepair;
       setTextButtonHighlighted(this.repairBtn, canRepair, RHYTHM_THEME.noteBlue);
+    }
+
+    if (this.bossEnemyId) {
+      const boss = this.enemies.find((e) => e.id === this.bossEnemyId);
+      if (boss?.alive) this.updateBossBar(boss);
     }
   }
 
@@ -602,6 +690,10 @@ export class DefenseScene extends Phaser.Scene {
         onClick: () => this.repairCore(),
       },
     );
+  }
+
+  private kickBattleBgm(): void {
+    void combatSfx.ensureBattleBgm(getRunDefenseBgmProfile());
   }
 
   private cleanupScene(): void {

@@ -38,6 +38,19 @@ export function getScaledEnemy(
   };
 }
 
+/** 终局 Boss 波次单独缩放（不影响其它关卡/波次） */
+export function applyBossFinaleModifiers(def: EnemyDef, wave?: WaveConfig): EnemyDef {
+  if (!wave?.bossFinale || def.armorType !== 'boss') return def;
+  const hpMult = wave.bossHpMult ?? 1;
+  const dmgMult = wave.bossDamageMult ?? 1;
+  if (hpMult === 1 && dmgMult === 1) return def;
+  return {
+    ...def,
+    hp: Math.max(1, Math.round(def.hp * hpMult)),
+    damage: Math.max(1, Math.round(def.damage * dmgMult)),
+  };
+}
+
 export function computeDamageAfterArmor(
   rawDamage: number,
   enemy: EnemyDef,

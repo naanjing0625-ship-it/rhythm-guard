@@ -20,6 +20,13 @@ export class CombatSfxEngine {
     this.applyVolume();
   }
 
+  /** 确保 AudioContext 就绪并启动 BGM（守卫阶段入口） */
+  async ensureBattleBgm(profile?: DefenseBgmProfile): Promise<void> {
+    await this.ensureReady();
+    if (!this.ctx || !this.master) return;
+    this.startBattleBgm(profile);
+  }
+
   setVolume(volume: number): void {
     this.volume = Math.max(0, Math.min(1, volume));
     this.applyVolume();

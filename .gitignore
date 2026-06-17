@@ -5,3 +5,6 @@ release/
 *.local
 .DS_Store
 dev-dist/
+
+# 本地导出的完整对话记录（不推送远程）
+docs/完整对话记录.md

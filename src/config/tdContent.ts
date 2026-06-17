@@ -44,6 +44,12 @@ export interface WaveConfig {
   delayBefore: number;
   templateId?: string;
   templateName?: string;
+  /** 终局 Boss 战：Boss 必须被击杀才能胜利，抵达核心仅持续扣血 */
+  bossFinale?: boolean;
+  /** 终局波 Boss 额外 HP 倍率（仅 bossFinale 波次） */
+  bossHpMult?: number;
+  /** 终局波 Boss 对核伤害倍率 */
+  bossDamageMult?: number;
 }
 
 export interface TdTowerTier {
@@ -91,7 +97,7 @@ export interface TdContent {
   attacks: Record<string, TdAttackDef>;
   towers: Record<string, TdTowerFamily>;
   enemies: Record<string, TdEnemyDef>;
-  waveTemplates: Record<string, WaveConfig & { id: string; name: string; threatBudget: number }>;
+  waveTemplates: Record<string, WaveConfig & { id: string; name: string; threatBudget: number; bossFinale?: boolean }>;
   levels: Record<string, { coreHp: number; scaling?: LevelScaling; waves: string[] }>;
 }
 
@@ -122,6 +128,9 @@ export function getTdLevelWaves(levelId: string): WaveConfig[] {
       enemies: t.enemies,
       templateId: id,
       templateName: t.name,
+      bossFinale: t.bossFinale,
+      bossHpMult: t.bossHpMult,
+      bossDamageMult: t.bossDamageMult,
     };
   });
 }
