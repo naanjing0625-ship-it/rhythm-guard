@@ -1,15 +1,13 @@
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, '..');
 
-const transcriptPath = join(
-  process.env.USERPROFILE ?? '',
+const transcriptsDir = join(
+  process.env.USERPROFILE ?? process.env.HOME ?? '',
   '.cursor/projects/c-Users-happyelements-Projects-rhythm-guard/agent-transcripts',
-  '3dd1b38a-87f9-4a34-a94b-ae8803ff5360',
-  '3dd1b38a-87f9-4a34-a94b-ae8803ff5360.jsonl',
 );
 
 const outPath = join(root, 'docs/完整对话记录.md');
@@ -21,6 +19,7 @@ function cleanText(raw) {
   t = t.replace(/<user_query>\s*/g, '');
   t = t.replace(/<\/user_query>/g, '');
   t = t.replace(/<manually_attached_skills>[\s\S]*?<\/manually_attached_skills>\s*/g, '');
+  t = t.replace(/<attached_files>[\s\S]*?<\/attached_files>\s*/g, '');
   t = t.replace(/<image_files>[\s\S]*?<\/image_files>\s*/g, '');
   t = t.replace(/\[Image\]\s*/g, '');
   t = t.replace(/\[REDACTED\]\s*/g, '');
@@ -35,6 +34,29 @@ function extractTextBlocks(content) {
     .filter((c) => c.type === 'text' && c.text)
     .map((c) => cleanText(c.text))
     .filter(Boolean);
+}
+
+function findLatestTranscript(dir) {
+  let latest = null;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const candidate = join(dir, entry.name, `${entry.name}.jsonl`);
+    try {
+      const mtime = statSync(candidate).mtimeMs;
+      if (!latest || mtime > latest.mtime) {
+        latest = { path: candidate, mtime };
+      }
+    } catch {
+      // ignore missing jsonl
+    }
+  }
+  return latest?.path ?? null;
+}
+
+const transcriptPath = findLatestTranscript(transcriptsDir);
+if (!transcriptPath) {
+  console.error('未找到 agent transcript 目录或 jsonl 文件:', transcriptsDir);
+  process.exit(1);
 }
 
 let raw;
@@ -65,7 +87,6 @@ for (const line of lines) {
   const body = texts.join('\n\n');
   if (!body) continue;
 
-  // 跳过纯系统/自动化消息
   if (/^Briefly inform the user about the task result/i.test(body)) continue;
 
   turn += 1;
@@ -73,10 +94,13 @@ for (const line of lines) {
   sections.push(`## ${turn}. ${roleLabel}\n\n${body}\n`);
 }
 
+const today = new Date().toISOString().slice(0, 10);
+
 const header = `# Rhythm Guard — 完整对话记录
 
-> 导出时间：${new Date().toISOString().slice(0, 10)}  
+> 导出时间：${today}  
 > 来源：Cursor Agent 会话 transcript  
+> 文件：\`${transcriptPath.replace(/\\/g, '/')}\`  
 > 说明：已过滤工具调用、图片附件标记等；仅保留用户与助手的文字内容。
 
 ---
@@ -90,5 +114,6 @@ writeFileSync(outPath, header + sections.join('\n---\n\n') + footer, 'utf8');
 const sizeKb = (Buffer.byteLength(header + sections.join(''), 'utf8') / 1024).toFixed(1);
 console.log(`\n✓ 已导出完整对话记录:`);
 console.log(`  ${outPath}`);
+console.log(`  来源: ${transcriptPath}`);
 console.log(`  对话轮次: ${turn}`);
 console.log(`  大小: ${sizeKb} KB\n`);

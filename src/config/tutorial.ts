@@ -93,7 +93,7 @@ export const TUTORIAL_STEPS: TutorialStepDef[] = [
     id: 'deploy_core',
     phase: 'deploy',
     title: '关于核心格',
-    body: '防守提示：\n· 怪物会朝核心移动\n· 塔铺在外圈，拦截来路',
+    body: '防守提示：\n· 怪物会朝核心移动\n· 外圈布阵，别让怪靠近核心',
   },
   {
     id: 'deploy_placed',
